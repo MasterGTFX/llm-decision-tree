@@ -16,4 +16,4 @@ The LLM constructs the *entire* decision tree upfront, before the user even star
 - **Internal Nodes:** Questions that narrow down the possibilities.
 - **Leaf Nodes:** The final conclusions (single diagnosis).
 
-This is a very valid and often more robust design than a dynamic one. It shifts the LLM's role from a "runtime brain" to an "offline compiler" that builds a expert system.
+It shifts the LLM's role from a "runtime brain" to an "offline compiler" that builds a expert system.
