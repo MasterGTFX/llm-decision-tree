@@ -20,6 +20,9 @@
         <main>
             <section class="input-section neo-box">
                 <h2>CONFIGURATION</h2>
+                <div id="role-selection-container" class="role-selection-grid">
+                    <!-- Roles will be populated here -->
+                </div>
                 <form id="generate-form">
                     <div class="form-group">
                         <label for="role">ROLE</label>
@@ -34,7 +37,7 @@
                         <label for="mode">MODE</label>
                         <select id="mode" name="mode">
                             <option value="recursive">Recursive (Automatic)</option>
-                            <option value="interactive">Interactive (Manual)</option>
+                            <option value="interactive" selected>Manual</option>
                         </select>
                     </div>
                     <button type="submit" class="neo-button">GENERATE TREE</button>

@@ -2,7 +2,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from openai import OpenAI
-from config import BASE_URL, API_KEY, LLM_MODEL
+from config import BASE_URL, API_KEY, LLM_MODEL, PREDEFINED_ROLES
 from tree import DecisionTreeGenerator
 import asyncio
 import threading
@@ -92,9 +92,21 @@ def run_expansion(role: str, query: str, answer_id: str):
     
     try:
         # Find the answer node
+        # Find the answer node
         node = current_tree_root.find_node_by_id(answer_id)
         if node and hasattr(node, 'potential_outcomes'): # Check if it's an AnswerNode
-             generator.expand_node(role, query, node)
+             new_node = generator.expand_node(role, query, node)
+             if new_node is None:
+                 # It's a leaf node, send conclusion
+                 if main_loop and main_loop.is_running():
+                    asyncio.run_coroutine_threadsafe(
+                        manager.broadcast({
+                            "type": "leaf", 
+                            "parent_answer_id": answer_id,
+                            "outcome": node.potential_outcomes[0] if node.potential_outcomes else "No outcome specified"
+                        }), 
+                        main_loop
+                    )
     except Exception as e:
         print(f"Error in expansion: {e}")
         if main_loop and main_loop.is_running():
@@ -121,3 +133,7 @@ async def expand_node(request: ExpandRequest):
     thread = threading.Thread(target=run_expansion, args=(request.role, request.query, request.answer_id))
     thread.start()
     return {"status": "expanding"}
+
+@app.get("/roles")
+async def get_roles():
+    return PREDEFINED_ROLES

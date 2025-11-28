@@ -10,8 +10,8 @@ from tree import DecisionTreeGenerator
 
 def main():
     # Example: Medical diagnosis for chest pain
-    role = "Medical Diagnosis Expert"
-    query = "A foot pain that worsens with activity and improves with rest."
+    role = "Technical Troubleshooter"
+    query = "My computer screen keeps flickering."
 
     print(f"Building decision tree for: {query}")
     print(f"Role: {role}")

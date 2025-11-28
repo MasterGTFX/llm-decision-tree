@@ -36,7 +36,6 @@ body {
     box-shadow: var(--shadow-offset) var(--shadow-offset) 0px var(--text-color);
     padding: 20px;
     border-radius: 0;
-    /* Brutalism usually has sharp corners, or small radius */
 }
 
 h1,
@@ -79,10 +78,28 @@ textarea {
 }
 
 input:focus,
-textarea:focus {
+textarea:focus,
+select:focus {
     outline: none;
     transform: translate(1px, 1px);
     box-shadow: 2px 2px 0px var(--text-color);
+}
+
+select {
+    width: 100%;
+    padding: 10px;
+    font-family: inherit;
+    font-size: 1rem;
+    border: var(--border-width) solid var(--text-color);
+    background-color: #fff;
+    box-shadow: 3px 3px 0px var(--text-color);
+    transition: all 0.1s;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23000000%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px top 50%;
+    background-size: 12px auto;
+    cursor: pointer;
 }
 
 .neo-button {
@@ -154,7 +171,6 @@ textarea:focus {
 .question-node {
     border: 2px solid #000;
     background-color: #c7d2fe;
-    /* Light indigo */
     padding: 10px;
     margin-bottom: 10px;
     box-shadow: 3px 3px 0px #000;
@@ -190,19 +206,84 @@ textarea:focus {
     font-weight: 700;
     background-color: var(--accent-color);
     display: inline-block;
-    padding: 2px 5px;
-    margin-bottom: 5px;
-    border: 1px solid #000;
+    padding: 5px 10px;
+    margin-bottom: 10px;
+    border: 2px solid #000;
 }
 
-.outcomes {
-    font-size: 0.9rem;
-    color: #555;
+.outcomes-toggle {
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: underline;
+    margin-bottom: 5px;
+    display: block;
+}
+
+.outcomes-container {
+    display: none;
     margin-bottom: 10px;
-    font-style: italic;
+    margin-top: 5px;
+}
+
+.outcomes-container.visible {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.outcome-tag {
+    font-size: 0.8rem;
+    background-color: #e5e7eb;
+    border: 1px solid #000;
+    padding: 2px 6px;
+    border-radius: 0;
 }
 
 .child-container {
     margin-top: 10px;
     padding-left: 10px;
+}
+
+/* Role Selection Grid */
+.role-selection-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.role-card {
+    background: var(--box-bg);
+    border: var(--border-width) solid var(--text-color);
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    box-shadow: 3px 3px 0px var(--text-color);
+}
+
+.role-card:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 5px 5px 0 var(--text-color);
+    background-color: #f3f4f6;
+}
+
+.role-card.selected {
+    background: var(--primary-color);
+    transform: translate(1px, 1px);
+    box-shadow: 2px 2px 0 var(--text-color);
+}
+
+.role-emoji {
+    font-size: 2rem;
+}
+
+.role-name {
+    font-weight: 700;
+    font-size: 0.9rem;
 }

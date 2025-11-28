@@ -1,6 +1,59 @@
 const form = document.getElementById('generate-form');
 const statusIndicator = document.getElementById('status-indicator');
 const treeContainer = document.getElementById('tree-container');
+const roleSelectionContainer = document.getElementById('role-selection-container');
+
+// Fetch and render roles on load
+fetchRoles();
+
+async function fetchRoles() {
+    try {
+        const response = await fetch('/roles');
+        if (!response.ok) throw new Error('Failed to fetch roles');
+        const roles = await response.json();
+        renderRoles(roles);
+    } catch (error) {
+        console.error('Error fetching roles:', error);
+        roleSelectionContainer.innerHTML = '<p>Error loading roles</p>';
+    }
+}
+
+function renderRoles(roles) {
+    roleSelectionContainer.innerHTML = '';
+    roles.forEach(role => {
+        const card = document.createElement('div');
+        card.className = 'role-card';
+        card.dataset.roleId = role.id;
+        card.onclick = () => selectRole(role, card);
+
+        const emoji = document.createElement('div');
+        emoji.className = 'role-emoji';
+        emoji.textContent = role.emoji;
+
+        const name = document.createElement('div');
+        name.className = 'role-name';
+        name.textContent = role.name;
+
+        card.appendChild(emoji);
+        card.appendChild(name);
+        roleSelectionContainer.appendChild(card);
+
+        // Select default (medical)
+        if (role.id === 'medical') {
+            selectRole(role, card);
+        }
+    });
+}
+
+function selectRole(role, cardElement) {
+    // Update inputs
+    document.getElementById('role').value = role.name;
+    document.getElementById('query').value = role.default_query;
+
+    // Update visual selection
+    document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
+    cardElement.classList.add('selected');
+}
 
 let ws = new WebSocket(`ws://${window.location.host}/ws`);
 
@@ -58,6 +111,10 @@ function handleMessage(data) {
         renderRoot(data.node);
     } else if (data.type === 'expand') {
         renderExpansion(data.parent_answer_id, data.node);
+    } else if (data.type === 'leaf') {
+        renderConclusion(data.parent_answer_id, data.outcome);
+        statusIndicator.textContent = "CONCLUSION REACHED";
+        statusIndicator.classList.remove('generating');
     } else if (data.type === 'complete') {
         statusIndicator.textContent = "COMPLETE";
         statusIndicator.classList.remove('generating');
@@ -99,10 +156,29 @@ function createQuestionElement(node) {
         ansText.textContent = ans.text;
         ansDiv.appendChild(ansText);
 
-        const outcomes = document.createElement('div');
-        outcomes.className = 'outcomes';
-        outcomes.textContent = `Outcomes: ${ans.outcomes.join(', ')}`;
-        ansDiv.appendChild(outcomes);
+        // Toggle button for outcomes
+        const toggleBtn = document.createElement('div');
+        toggleBtn.className = 'outcomes-toggle';
+        toggleBtn.textContent = 'Show Outcomes';
+        toggleBtn.onclick = (e) => {
+            e.stopPropagation();
+            const container = ansDiv.querySelector('.outcomes-container');
+            container.classList.toggle('visible');
+            toggleBtn.textContent = container.classList.contains('visible') ? 'Hide Outcomes' : 'Show Outcomes';
+        };
+        ansDiv.appendChild(toggleBtn);
+
+        // Outcomes container
+        const outcomesContainer = document.createElement('div');
+        outcomesContainer.className = 'outcomes-container';
+
+        ans.outcomes.forEach(outcome => {
+            const tag = document.createElement('span');
+            tag.className = 'outcome-tag';
+            tag.textContent = outcome;
+            outcomesContainer.appendChild(tag);
+        });
+        ansDiv.appendChild(outcomesContainer);
 
         const childContainer = document.createElement('div');
         childContainer.className = 'child-container';
@@ -130,6 +206,29 @@ function renderExpansion(parentAnswerId, node) {
 
         // Scroll to view
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+        console.error(`Parent answer container ${parentAnswerId} not found`);
+    }
+}
+
+function renderConclusion(parentAnswerId, outcome) {
+    const container = document.getElementById(`child-container-${parentAnswerId}`);
+    if (container) {
+        const div = document.createElement('div');
+        div.className = 'conclusion-node';
+        div.textContent = `CONCLUSION: ${outcome}`;
+
+        // Add some basic styling here if not in CSS
+        div.style.padding = '1rem';
+        div.style.marginTop = '1rem';
+        div.style.border = '2px solid #000';
+        div.style.backgroundColor = '#e0ffe0';
+        div.style.fontWeight = 'bold';
+
+        container.appendChild(div);
+
+        // Scroll to view
+        div.scrollIntoView({ behavior: 'smooth', block: 'center' });
     } else {
         console.error(`Parent answer container ${parentAnswerId} not found`);
     }
