@@ -1,5 +1,10 @@
-from typing import List, Optional, Union, Callable
+from typing import List, Optional, Union, Callable, Dict, Any
 import uuid
+import json
+import time
+import os
+import re
+from datetime import datetime
 from pydantic import BaseModel
 from openai import OpenAI
 from config import MAX_DEPTH
@@ -38,9 +43,11 @@ class DecisionTreeGenerator:
                        If False, generates only the root question.
         """
         print(f"Fetching initial question for: {query}")
-        initial_data = self._get_initial_question(role, query)
+        initial_data, log_entry = self._get_initial_question(role, query)
         
         root = QuestionNode(initial_data.question)
+        root.logs.append(log_entry) # Store initial log
+
         for answer in initial_data.answers:
             root.add_answer(answer.answer_text, answer.potential_outcomes)
             
@@ -49,19 +56,23 @@ class DecisionTreeGenerator:
                 "type": "root",
                 "node": self._serialize_node(root)
             })
-            
+        
+        # Save initial state
+        self.save_tree_to_json(root, role, query)
+
         if recursive:
             print("Building decision tree recursively...")
             for answer_node in root.answers:
-                self._build_recursive(role, query, answer_node)
+                self._build_recursive(role, query, answer_node, root)
             
         return root
 
-    def _get_initial_question(self, role: str, query: str) -> QuestionSchema:
+    def _get_initial_question(self, role: str, query: str) -> tuple[QuestionSchema, Dict[str, Any]]:
         """Get initial question with answers and outcomes."""
         system_prompt = INITIAL_SYSTEM_PROMPT.format(role=role)
         user_prompt = INITIAL_USER_PROMPT.format(query=query)
 
+        start_time = time.time()
         response = self.client.beta.chat.completions.parse(
             model=self.llm_model,
             messages=[
@@ -70,13 +81,23 @@ class DecisionTreeGenerator:
             ],
             response_format=QuestionSchema,
         )
+        duration = time.time() - start_time
         response_json = response.choices[0].message.parsed
         print(f"Root Question: {response_json.question}")
-        return response_json
+
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "type": "initial_question",
+            "duration_seconds": duration,
+            "system_prompt": system_prompt,
+            "user_prompt": user_prompt,
+            "response": response_json.model_dump()
+        }
+        return response_json, log_entry
 
     def _get_discriminating_question(
         self, role: str, query: str, history: str, outcomes: list[str]
-    ) -> QuestionSchema:
+    ) -> tuple[QuestionSchema, Dict[str, Any]]:
         """Get the most discriminating question for current branch."""
         system_prompt = DISCRIMINATING_SYSTEM_PROMPT.format(role=role)
         outcomes_text = "\n".join(f"- {outcome}" for outcome in outcomes)
@@ -84,6 +105,7 @@ class DecisionTreeGenerator:
             query=query, history=history, outcomes=outcomes_text
         )
 
+        start_time = time.time()
         response = self.client.beta.chat.completions.parse(
             model=self.llm_model,
             messages=[
@@ -92,7 +114,15 @@ class DecisionTreeGenerator:
             ],
             response_format=QuestionSchema,
         )
-        return response.choices[0].message.parsed
+        duration = time.time() - start_time
+        return response.choices[0].message.parsed, {
+            "timestamp": datetime.now().isoformat(),
+            "type": "discriminating_question",
+            "duration_seconds": duration,
+            "system_prompt": system_prompt,
+            "user_prompt": user_prompt,
+            "response": response.choices[0].message.parsed.model_dump()
+        }
 
     def expand_node(self, role: str, query: str, answer_node: "AnswerNode") -> Optional["QuestionNode"]:
         """
@@ -104,9 +134,14 @@ class DecisionTreeGenerator:
 
         # Get next discriminating question
         history = answer_node.get_history_str()
-        question_data = self._get_discriminating_question(
+        question_data, log_entry = self._get_discriminating_question(
             role, query, history, answer_node.potential_outcomes
         )
+        
+        # Find root to append logs
+        root = answer_node.root
+        if hasattr(root, 'logs'):
+            root.logs.append(log_entry)
         
         print(f"  Extending branch: {answer_node.answer_text[:30]}... -> {question_data.question}")
 
@@ -125,16 +160,19 @@ class DecisionTreeGenerator:
                 "node": self._serialize_node(question_node)
             })
             
+        # Save updated tree
+        self.save_tree_to_json(root, role, query)
+
         return question_node
 
-    def _build_recursive(self, role: str, query: str, answer_node: "AnswerNode") -> None:
+    def _build_recursive(self, role: str, query: str, answer_node: "AnswerNode", root: "QuestionNode") -> None:
         """Recursively build tree from an answer node."""
         question_node = self.expand_node(role, query, answer_node)
         
         if question_node:
             # Recursively build subtrees
             for child_answer in question_node.answers:
-                self._build_recursive(role, query, child_answer)
+                self._build_recursive(role, query, child_answer, root)
 
     def _serialize_node(self, node: "QuestionNode") -> dict:
         """Helper to serialize a node for the callback."""
@@ -151,6 +189,37 @@ class DecisionTreeGenerator:
             ]
         }
 
+    def save_tree_to_json(self, root: "TreeNode", role: str, query: str) -> None:
+        """Saves the tree and logs to a JSON file."""
+        logs_dir = "logs"
+        if not os.path.exists(logs_dir):
+            os.makedirs(logs_dir)
+
+        # Sanitize filename
+        safe_role = re.sub(r'[^a-zA-Z0-9]', '_', role[:20])
+        safe_query = re.sub(r'[^a-zA-Z0-9]', '_', query[:30])
+        timestamp = datetime.fromtimestamp(root.created_at).strftime('%Y%m%d_%H%M%S')
+        filename = f"{logs_dir}/{timestamp}_{safe_role}_{safe_query}.json"
+
+        data = {
+            "meta": {
+                "role": role,
+                "query": query,
+                "model": self.llm_model,
+                "created_at": datetime.fromtimestamp(root.created_at).isoformat(),
+                "last_updated": datetime.now().isoformat()
+            },
+            "tree": root.to_dict(),
+            "logs": root.logs
+        }
+
+        try:
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            # print(f"Tree saved to {filename}") # Optional: reduce noise
+        except Exception as e:
+            print(f"Error saving tree to JSON: {e}")
+
 
 class TreeNode:
     """
@@ -161,6 +230,8 @@ class TreeNode:
     def __init__(self, parent: Optional["TreeNode"] = None):
         self.parent = parent
         self.id = str(uuid.uuid4())
+        self.created_at = time.time()
+        self.logs: List[Dict[str, Any]] = [] # Only used by root, but kept here for simplicity
 
     @property
     def depth(self) -> int:
@@ -209,6 +280,14 @@ class TreeNode:
                     return found
         return None
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize node to dictionary."""
+        return {
+            "id": self.id,
+            "created_at": self.created_at,
+            "depth": self.depth
+        }
+
     def __str__(self) -> str:
         """
         Return a string representation of the tree starting from this node.
@@ -255,6 +334,15 @@ class QuestionNode(TreeNode):
         self.answers.append(answer_node)
         return answer_node
 
+    def to_dict(self) -> Dict[str, Any]:
+        data = super().to_dict()
+        data.update({
+            "type": "question",
+            "question": self.question,
+            "answers": [ans.to_dict() for ans in self.answers]
+        })
+        return data
+
     def _get_tree_string(self, level: int = 0) -> str:
         indent = "\t" * level
         result = f"{indent}Question: {self.question}\n"
@@ -288,6 +376,16 @@ class AnswerNode(TreeNode):
         """Set the child question node."""
         self.child = question_node
         question_node.parent = self
+
+    def to_dict(self) -> Dict[str, Any]:
+        data = super().to_dict()
+        data.update({
+            "type": "answer",
+            "answer_text": self.answer_text,
+            "potential_outcomes": self.potential_outcomes,
+            "child": self.child.to_dict() if self.child else None
+        })
+        return data
 
     def _get_tree_string(self, level: int = 0) -> str:
         indent = "\t" * level

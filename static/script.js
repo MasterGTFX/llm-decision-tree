@@ -111,8 +111,10 @@ function handleMessage(data) {
         renderRoot(data.node);
     } else if (data.type === 'expand') {
         renderExpansion(data.parent_answer_id, data.node);
+        removeGeneratingClass(data.parent_answer_id);
     } else if (data.type === 'leaf') {
         renderConclusion(data.parent_answer_id, data.outcome);
+        removeGeneratingClass(data.parent_answer_id);
         statusIndicator.textContent = "CONCLUSION REACHED";
         statusIndicator.classList.remove('generating');
     } else if (data.type === 'complete') {
@@ -122,6 +124,13 @@ function handleMessage(data) {
         statusIndicator.textContent = "ERROR";
         statusIndicator.classList.remove('generating');
         alert("Error: " + data.message);
+    }
+}
+
+function removeGeneratingClass(answerId) {
+    const answerElement = document.getElementById(`answer-${answerId}`);
+    if (answerElement) {
+        answerElement.classList.remove('generating');
     }
 }
 
@@ -235,12 +244,24 @@ function renderConclusion(parentAnswerId, outcome) {
 }
 
 async function handleAnswerClick(answerId) {
+    console.log(`handleAnswerClick called for ${answerId}`);
     const mode = document.getElementById('mode').value;
     if (mode !== 'interactive') return;
 
     // Check if already expanded
     const container = document.getElementById(`child-container-${answerId}`);
-    if (container && container.children.length > 0) return;
+    if (container && container.children.length > 0) {
+        console.log("Already expanded");
+        return;
+    }
+
+    const answerElement = document.getElementById(`answer-${answerId}`);
+    if (answerElement) {
+        console.log("Adding generating class to", answerElement);
+        answerElement.classList.add('generating');
+    } else {
+        console.error(`Element answer-${answerId} not found`);
+    }
 
     statusIndicator.textContent = "EXPANDING...";
     statusIndicator.classList.add('generating');
@@ -264,6 +285,9 @@ async function handleAnswerClick(answerId) {
         console.error(error);
         statusIndicator.textContent = "ERROR";
         statusIndicator.classList.remove('generating');
+        if (answerElement) {
+            answerElement.classList.remove('generating');
+        }
         alert("Error expanding node: " + error.message);
     }
 }
